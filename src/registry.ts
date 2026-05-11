@@ -69,16 +69,23 @@ export class Registry {
   /**
    * Replace all processes for a session under a given cwd.
    * Flushes eagerly on the very first write so the file exists on disk.
+   * Optional `meta` merges extra session-level fields (e.g. lastHeartbeatAt).
    */
   write(
     sessionId: string,
     cwd: string,
     processes: Record<string, ProcessEntry>,
+    meta?: Partial<Pick<SessionData, "lastHeartbeatAt">>,
   ): void {
     if (!this.data.cwdIndex[cwd]) {
       this.data.cwdIndex[cwd] = { sessions: {} };
     }
-    this.data.cwdIndex[cwd].sessions[sessionId] = { processes };
+    const existing = this.data.cwdIndex[cwd].sessions[sessionId];
+    this.data.cwdIndex[cwd].sessions[sessionId] = {
+      ...existing,
+      ...meta,
+      processes,
+    };
     this.dirty = true;
 
     if (!this.flushed) {
@@ -114,6 +121,15 @@ export class Registry {
     delete group.sessions[sessionId].processes[processId];
     this.dirty = true;
     this.pruneIfEmpty(cwd, sessionId);
+  }
+
+  /**
+   * Return all cwd paths that have sessions.
+   * Flushes pending writes first.
+   */
+  listCwds(): string[] {
+    this.flushIfDirty();
+    return Object.keys(this.data.cwdIndex);
   }
 
   /**
