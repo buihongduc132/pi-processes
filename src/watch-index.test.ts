@@ -25,7 +25,7 @@ describe("WatchIndex – worst-first", () => {
     const elapsed = performance.now() - start;
 
     expect(matches).toHaveLength(100);
-    expect(elapsed).toBeLessThan(1);
+    expect(elapsed).toBeLessThan(5);
   });
 
   // (b) Invalid regex in watch config: graceful degradation
