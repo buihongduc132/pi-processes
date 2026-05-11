@@ -21,6 +21,7 @@ export interface WatchMatch {
   regex: RegExp;
   tags: string[];
   labels: string[];
+  repeat: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,7 @@ export class WatchIndex {
       regex: watch.regex,
       tags: watch.tags,
       labels: watch.labels,
+      repeat: watch.repeat,
     };
   }
 }

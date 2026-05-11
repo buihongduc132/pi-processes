@@ -105,12 +105,18 @@ export class SessionSummaryHook {
     sessionId: string,
     watchConfig?: WatchSubscription,
   ): string {
-    if (watchConfig) {
-      this.subscriberIndex.subscribe(sessionId, cwd, watchConfig);
-    }
+    try {
+      if (!cwd) return 'Process Summary unavailable.';
 
-    const summary = this.processLister.getSummary(cwd, sessionId);
-    return formatSummary(summary);
+      if (watchConfig) {
+        this.subscriberIndex.subscribe(sessionId, cwd, watchConfig);
+      }
+
+      const summary = this.processLister.getSummary(cwd, sessionId);
+      return formatSummary(summary);
+    } catch {
+      return 'Process Summary unavailable.';
+    }
   }
 
   /**
@@ -123,7 +129,13 @@ export class SessionSummaryHook {
    * @returns Formatted multi-line process summary string.
    */
   onTurnEnd(cwd: string, sessionId: string): string {
-    const summary = this.processLister.getSummary(cwd, sessionId);
-    return formatSummary(summary);
+    try {
+      if (!cwd) return 'Process Summary unavailable.';
+
+      const summary = this.processLister.getSummary(cwd, sessionId);
+      return formatSummary(summary);
+    } catch {
+      return 'Process Summary unavailable.';
+    }
   }
 }

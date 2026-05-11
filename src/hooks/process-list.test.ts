@@ -394,4 +394,115 @@ describe("ProcessLister", () => {
     expect(runningStatuses.every((s: string) => s === "running")).toBe(true);
     expect(summary.current.lastCompleted!.status).toBe("exited");
   });
+
+  // =========================================================================
+  // Edge case fixes (Fix 6, Fix 7)
+  // =========================================================================
+  describe('Edge case fixes', () => {
+    // -----------------------------------------------------------------------
+    // Fix 6a: killed process visible in lastCompleted (CC-1)
+    // -----------------------------------------------------------------------
+    it('treats killed processes as completed (visible in lastCompleted)', () => {
+      const cwd = '/abs/project-a';
+      const reg = new Registry(registryPath);
+
+      reg.write('ses_001', cwd, {
+        proc_run: makeProcess({ name: 'server', status: 'running' }),
+        proc_killed: makeProcess({ name: 'old-build', status: 'killed' }),
+      });
+
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+      hb.heartbeat('ses_001', cwd);
+
+      const lister = new ProcessLister(reg, hb);
+      const summary = lister.getSummary(cwd, 'ses_001');
+
+      // 'killed' should be treated as completed
+      expect(summary.current.running).toHaveLength(1);
+      expect(summary.current.running[0].name).toBe('server');
+      expect(summary.current.lastCompleted).not.toBeNull();
+      expect(summary.current.lastCompleted!.name).toBe('old-build');
+      expect(summary.current.lastCompleted!.status).toBe('killed');
+    });
+
+    // -----------------------------------------------------------------------
+    // Fix 6b: terminating shown as running (CC-2)
+    // -----------------------------------------------------------------------
+    it('treats terminating processes as running', () => {
+      const cwd = '/abs/project-a';
+      const reg = new Registry(registryPath);
+
+      reg.write('ses_001', cwd, {
+        proc_term: makeProcess({ name: 'shutting-down', status: 'terminating' }),
+      });
+
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+      hb.heartbeat('ses_001', cwd);
+
+      const lister = new ProcessLister(reg, hb);
+      const summary = lister.getSummary(cwd, 'ses_001');
+
+      // 'terminating' should be treated as running
+      expect(summary.current.running).toHaveLength(1);
+      expect(summary.current.running[0].name).toBe('shutting-down');
+      expect(summary.current.lastCompleted).toBeNull();
+    });
+
+    // -----------------------------------------------------------------------
+    // Fix 6c: terminate_timeout shown as running (CC-2)
+    // -----------------------------------------------------------------------
+    it('treats terminate_timeout processes as running', () => {
+      const cwd = '/abs/project-a';
+      const reg = new Registry(registryPath);
+
+      reg.write('ses_001', cwd, {
+        proc_to: makeProcess({ name: 'stuck-proc', status: 'terminate_timeout' }),
+      });
+
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+      hb.heartbeat('ses_001', cwd);
+
+      const lister = new ProcessLister(reg, hb);
+      const summary = lister.getSummary(cwd, 'ses_001');
+
+      // 'terminate_timeout' should be treated as running
+      expect(summary.current.running).toHaveLength(1);
+      expect(summary.current.running[0].name).toBe('stuck-proc');
+      expect(summary.current.lastCompleted).toBeNull();
+    });
+
+    // -----------------------------------------------------------------------
+    // Fix 7: siblings.recentCompleted capped at 50 (F3-Z2-1)
+    // -----------------------------------------------------------------------
+    it('caps siblings.recentCompleted to 50 entries', () => {
+      const cwd = '/abs/project-a';
+      const reg = new Registry(registryPath);
+
+      // Current session with 1 running process
+      reg.write('ses_current', cwd, {
+        proc_cur: makeProcess({ name: 'my-server', status: 'running' }),
+      });
+
+      // Build 60 sibling sessions, each with 1 exited process
+      for (let i = 0; i < 60; i++) {
+        const sid = `sib_${i.toString().padStart(3, '0')}`;
+        reg.write(sid, cwd, {
+          [`proc_${i}`]: makeProcess({
+            name: `sibling-${i}`,
+            status: 'exited',
+            startTime: i,
+          }),
+        });
+      }
+
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+      hb.heartbeat('ses_current', cwd);
+
+      const lister = new ProcessLister(reg, hb);
+      const summary = lister.getSummary(cwd, 'ses_current');
+
+      // recentCompleted should be capped at 50, not 60
+      expect(summary.siblings.recentCompleted.length).toBeLessThanOrEqual(50);
+    });
+  });
 });

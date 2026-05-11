@@ -363,4 +363,51 @@ describe("HeartbeatManager", () => {
     expect(result.prunedSessions).toEqual([]);
     expect(result.terminatedProcesses).toEqual([]);
   });
+
+  // -------------------------------------------------------------------------
+  // Edge case fixes — guard heartbeat() for non-existent sessions
+  // -------------------------------------------------------------------------
+
+  describe('Edge case fixes', () => {
+    it('heartbeat on unknown session is a no-op (does not create entry)', () => {
+      const reg = new Registry(registryPath);
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+
+      // Call heartbeat on a session that was never written
+      hb.heartbeat('ses_unknown', '/abs/project-a');
+
+      // Should NOT have created a session entry
+      expect(reg.readSession('/abs/project-a', 'ses_unknown')).toBeNull();
+    });
+
+    it('heartbeat after removeProcess is a no-op (does not re-create zombie)', () => {
+      const cwd = '/abs/project-a';
+      const reg = new Registry(registryPath);
+
+      reg.write('ses_001', cwd, { proc_1: makeProcess() });
+      reg.removeProcess(cwd, 'ses_001', 'proc_1');
+
+      // Session is now gone
+      expect(reg.readSession(cwd, 'ses_001')).toBeNull();
+
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+      hb.heartbeat('ses_001', cwd);
+
+      // Should NOT re-create the session
+      expect(reg.readSession(cwd, 'ses_001')).toBeNull();
+    });
+
+    it('heartbeat does not create zombie session with empty processes', () => {
+      const cwd = '/abs/project-a';
+      const reg = new Registry(registryPath);
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+
+      // heartbeat on a completely unknown session
+      hb.heartbeat('ses_ghost', cwd);
+
+      // No entry should exist in the registry at all
+      const cwdGroup = reg.readCwd(cwd);
+      expect(cwdGroup).toBeNull();
+    });
+  });
 });

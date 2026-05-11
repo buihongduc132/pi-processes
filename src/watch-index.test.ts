@@ -267,3 +267,39 @@ describe("WatchIndex – core cases", () => {
     expect(index.matchLine("stderr", "anything")).toEqual([]);
   });
 });
+
+// ─── Edge case fixes (Fix 8) ──────────────────────────────────────
+
+describe('WatchIndex \u2013 Edge case fixes', () => {
+  // Fix 8: WatchMatch must include repeat field (GAP-07)
+  it('includes repeat field in WatchMatch', () => {
+    const watches: NamedWatchConfigMap = {
+      'repeat-watch': {
+        pattern: 'heartbeat',
+        stream: 'stdout',
+        repeat: true,
+        tags: ['health'],
+        labels: [],
+      },
+      'no-repeat-watch': {
+        pattern: 'ready',
+        stream: 'stdout',
+        repeat: false,
+        tags: ['lifecycle'],
+        labels: [],
+      },
+    };
+
+    const index = new WatchIndex(watches);
+
+    const matches = index.matchLine('stdout', 'heartbeat from server');
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toHaveProperty('repeat');
+    expect(matches[0].repeat).toBe(true);
+
+    const matches2 = index.matchLine('stdout', 'ready on port 3000');
+    expect(matches2).toHaveLength(1);
+    expect(matches2[0]).toHaveProperty('repeat');
+    expect(matches2[0].repeat).toBe(false);
+  });
+});

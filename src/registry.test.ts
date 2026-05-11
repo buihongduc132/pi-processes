@@ -293,5 +293,52 @@ describe("Registry", () => {
     expect(cwd0!.sessions.ses_0_0.processes.proc_0_0.name).toBe("p-0-0");
   });
 
+  // -------------------------------------------------------------------------
+  // Edge case fixes — input validation
+  // -------------------------------------------------------------------------
 
+  describe('Edge case fixes', () => {
+    it('rejects empty cwd with TypeError', () => {
+      const reg = new Registry(registryPath);
+      expect(() => reg.write('ses_001', '', { p1: makeProcess() })).toThrow(TypeError);
+    });
+
+    it('rejects empty sessionId with TypeError', () => {
+      const reg = new Registry(registryPath);
+      expect(() => reg.write('', '/abs/project-a', { p1: makeProcess() })).toThrow(TypeError);
+    });
+
+    it('rejects undefined sessionId with TypeError', () => {
+      const reg = new Registry(registryPath);
+      expect(() => reg.write(undefined as any, '/abs/project-a', { p1: makeProcess() })).toThrow(TypeError);
+    });
+
+    it('propagates non-SyntaxError from load (e.g. EACCES)', () => {
+      // Write a valid registry file, then make it unreadable (chmod 000)
+      // On non-Windows, readFileSync should throw EACCES, not be swallowed
+      if (process.platform === 'win32') return; // skip on Windows
+
+      const reg1 = new Registry(registryPath);
+      reg1.write('ses_001', '/abs/project-a', { p1: makeProcess() });
+
+      // Make the file unreadable
+      const { chmodSync } = require('node:fs');
+      chmodSync(registryPath, 0o000);
+
+      try {
+        // Constructing a new Registry triggers load() which should propagate EACCES
+        expect(() => new Registry(registryPath)).toThrow();
+        // Verify it is NOT a SyntaxError — it should be a system error (EACCES)
+        try {
+          new Registry(registryPath);
+        } catch (err: any) {
+          expect(err).not.toBeInstanceOf(SyntaxError);
+          expect(err.code).toBe('EACCES');
+        }
+      } finally {
+        // Restore permissions for cleanup
+        chmodSync(registryPath, 0o644);
+      }
+    });
+  });
 });

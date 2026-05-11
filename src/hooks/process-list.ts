@@ -18,7 +18,10 @@ export interface ProcessSummary {
 // ---------------------------------------------------------------------------
 
 /** Terminal statuses that represent a finished process. */
-const COMPLETED_STATUSES: ReadonlySet<string> = new Set(["exited", "terminated"]);
+const COMPLETED_STATUSES: ReadonlySet<string> = new Set(["exited", "terminated", "killed"]);
+
+/** Live statuses that represent an active (non-completed) process. */
+const LIVE_STATUSES: ReadonlySet<string> = new Set(["running", "terminating", "terminate_timeout"]);
 
 /** Whether a process is in a terminal (non-running) state. */
 function isCompleted(proc: ProcessEntry): boolean {
@@ -128,11 +131,11 @@ export class ProcessLister {
 
       if (sid === sessionId) {
         for (const proc of processes) {
-          if (proc.status === "running") currentRunning.push(proc);
+          if (LIVE_STATUSES.has(proc.status)) currentRunning.push(proc);
         }
       } else {
         for (const proc of processes) {
-          if (proc.status === "running") {
+          if (LIVE_STATUSES.has(proc.status)) {
             siblingsRunning.push(proc);
           } else if (isCompleted(proc)) {
             siblingsCompleted.push(proc);
@@ -148,7 +151,7 @@ export class ProcessLister {
           Object.values(sessions[sessionId]?.processes ?? {}),
         ),
       },
-      siblings: { running: siblingsRunning, recentCompleted: siblingsCompleted },
+      siblings: { running: siblingsRunning, recentCompleted: siblingsCompleted.slice(-50) },
     };
   }
 }

@@ -360,4 +360,86 @@ describe("SessionSummaryHook", () => {
     // Should show sibling info
     expect(result).toContain("sibling-server");
   });
+
+  // =========================================================================
+  // Edge case fixes (Fix 10, Fix 11)
+  // =========================================================================
+  describe('Edge case fixes', () => {
+    // -----------------------------------------------------------------------
+    // Fix 10a: onTurnEnd catches getSummary error and returns fallback
+    // -----------------------------------------------------------------------
+    it('onTurnEnd catches getSummary error and returns safe fallback string', () => {
+      const cwd = '/abs/project-a';
+      const reg = new Registry(registryPath);
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+      const lister = new ProcessLister(reg, hb);
+
+      // Override getSummary to throw
+      lister.getSummary = (_cwd: string, _sid: string) => {
+        throw new Error('simulated getSummary failure');
+      };
+
+      const subIndex = new SubscriberIndex();
+      const hook = new SessionSummaryHook(reg, hb, lister, subIndex);
+
+      // Must NOT throw \u2014 should return a safe fallback string
+      const result = hook.onTurnEnd(cwd, 'ses_broken');
+
+      expect(result).toBeDefined();
+      expect(typeof result).toBe('string');
+      // Should be a specific fallback message, not the normal summary format
+      expect(result).toContain('unavailable');
+    });
+
+    // -----------------------------------------------------------------------
+    // Fix 11: empty/falsy cwd returns safe fallback
+    // -----------------------------------------------------------------------
+    it('onTurnEnd returns safe fallback for empty cwd', () => {
+      const cwd = '';
+      const reg = new Registry(registryPath);
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+      const lister = new ProcessLister(reg, hb);
+      const subIndex = new SubscriberIndex();
+
+      const hook = new SessionSummaryHook(reg, hb, lister, subIndex);
+
+      // Must NOT throw \u2014 should return a safe fallback string
+      const result = hook.onTurnEnd(cwd, 'ses_nocwd');
+
+      expect(result).toBeDefined();
+      expect(typeof result).toBe('string');
+      // Should be a specific fallback message, not the normal summary format
+      expect(result).toContain('unavailable');
+    });
+
+    // -----------------------------------------------------------------------
+    // Fix 10b: onSessionStart catches subscribe error
+    // -----------------------------------------------------------------------
+    it('onSessionStart catches subscribe error and returns safe fallback', () => {
+      const cwd = '/abs/project-a';
+      const reg = new Registry(registryPath);
+      const hb = new HeartbeatManager(reg, { defaultTtlMs: 60_000 });
+      const lister = new ProcessLister(reg, hb);
+
+      // Override subscribe to throw
+      const subIndex = new SubscriberIndex();
+      subIndex.subscribe = (_sid: string, _cwd: string, _sub: WatchSubscription) => {
+        throw new Error('simulated subscribe failure');
+      };
+
+      const hook = new SessionSummaryHook(reg, hb, lister, subIndex);
+
+      const watchConfig: WatchSubscription = {
+        includeTagsAny: ['backend'],
+      };
+
+      // Must NOT throw \u2014 should return a safe fallback string
+      const result = hook.onSessionStart(cwd, 'ses_broken', watchConfig);
+
+      expect(result).toBeDefined();
+      expect(typeof result).toBe('string');
+      // Should be a specific fallback message, not the normal summary format
+      expect(result).toContain('unavailable');
+    });
+  });
 });

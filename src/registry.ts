@@ -77,6 +77,12 @@ export class Registry {
     processes: Record<string, ProcessEntry>,
     meta?: Partial<Pick<SessionData, "lastHeartbeatAt">>,
   ): void {
+    if (!cwd || cwd === '') {
+      throw new TypeError('cwd must be a non-empty string');
+    }
+    if (!sessionId || sessionId === '') {
+      throw new TypeError('sessionId must be a non-empty string');
+    }
     if (!this.data.cwdIndex[cwd]) {
       this.data.cwdIndex[cwd] = { sessions: {} };
     }
@@ -155,9 +161,12 @@ export class Registry {
     try {
       const raw = readFileSync(this.filePath, "utf-8");
       return JSON.parse(raw) as RegistryData;
-    } catch {
-      // Corrupt or unreadable file — start fresh; will overwrite on next flush.
-      return this.emptyData();
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        // Corrupt JSON — start fresh; will overwrite on next flush.
+        return this.emptyData();
+      }
+      throw err;
     }
   }
 

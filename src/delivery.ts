@@ -46,8 +46,15 @@ type SessionHealth = "ok" | "crashed";
  * Format: `[processName] watchName: line (tags: tag1, tag2)`
  */
 function formatMatchMessage(match: MatchInput): string {
+  // Sanitize: strip control chars (\n, \r, \t, chars < 0x20 except space)
+  let line = match.line.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/[\n\r\t]/g, ' ');
+  // Truncate to 500 chars
+  if (line.length > 500) {
+    line = line.slice(0, 500) + '[truncated]';
+  }
   const tags = match.watchTags.join(", ");
-  return `[${match.processName}] ${match.watchName}: ${match.line} (tags: ${tags})`;
+  return `[${match.processName}] ${match.watchName}: ${line} (tags: ${tags})`;
 }
 
 // ---------------------------------------------------------------------------

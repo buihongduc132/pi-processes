@@ -314,3 +314,43 @@ describe("DeliveryManager – core cases", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Edge case fixes (Fix 9)
+// ---------------------------------------------------------------------------
+
+describe('DeliveryManager \u2013 Edge case fixes', () => {
+  // Fix 9a: formatMessage strips newlines and control chars (EC-F7-03)
+  it('formatMessage strips newlines and control characters from line', () => {
+    const index = new SubscriberIndex();
+    const manager = new DeliveryManager(index);
+    const match = makeMatch({
+      line: 'line with\nnewline and\rcarriage and\ttab and\x07bell',
+    });
+
+    const msg = manager.formatMessage(match);
+
+    // Should NOT contain literal newlines or control chars
+    expect(msg).not.toContain('\n');
+    expect(msg).not.toContain('\r');
+    expect(msg).not.toContain('\x07');
+    // Should still contain the safe parts
+    expect(msg).toContain('line with');
+    expect(msg).toContain('newline and');
+  });
+
+  // Fix 9b: formatMessage truncates long lines to 500 chars (EC-F7-03)
+  it('formatMessage truncates lines exceeding 500 chars with [truncated] suffix', () => {
+    const index = new SubscriberIndex();
+    const manager = new DeliveryManager(index);
+    const longLine = 'A'.repeat(600);
+    const match = makeMatch({ line: longLine });
+
+    const msg = manager.formatMessage(match);
+
+    // Should contain [truncated] indicator
+    expect(msg).toContain('[truncated]');
+    // Should not contain the full 600-char line
+    expect(msg).not.toContain('A'.repeat(600));
+  });
+});

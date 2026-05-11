@@ -26,6 +26,95 @@ function cleanupTmpDir(dir: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Edge case fixes — cross-CWD isolation + excludeLabels
+// ---------------------------------------------------------------------------
+
+describe('SubscriberIndex – Edge case fixes', () => {
+  it('cross-CWD exclusion does not contaminate other cwds', () => {
+    const cwdA = createTmpDir();
+    const cwdB = createTmpDir();
+    try {
+      const index = new SubscriberIndex();
+
+      // session-X subscribes in BOTH cwds:
+      //   cwdA: includeTagsAny [backend], excludeTagsAny [noise]
+      //   cwdB: includeTagsAny [backend] (no exclusion)
+      index.subscribe('session-X', cwdA, {
+        includeTagsAny: ['backend'],
+        excludeTagsAny: ['noise'],
+      });
+      index.subscribe('session-X', cwdB, {
+        includeTagsAny: ['backend'],
+      });
+
+      // Resolve for cwdA with tag "noise": session-X should be excluded
+      let targetsA = index.resolveTargets(cwdA, ['backend', 'noise'], []);
+      expect(targetsA).toEqual([]);
+
+      // Resolve for cwdB with tag "noise": session-X should STILL match
+      // because the cwdA exclusion must not leak into cwdB resolution
+      let targetsB = index.resolveTargets(cwdB, ['backend', 'noise'], []);
+      expect(targetsB).toEqual(['session-X']);
+    } finally {
+      cleanupTmpDir(cwdA);
+      cleanupTmpDir(cwdB);
+    }
+  });
+
+  it('excludeLabels filters out sessions when watch has a matching label', () => {
+    const cwd = createTmpDir();
+    try {
+      const index = new SubscriberIndex();
+
+      index.subscribe('session-A', cwd, {
+        includeTagsAny: ['backend'],
+        excludeLabels: ['debug'],
+      });
+      index.subscribe('session-B', cwd, {
+        includeTagsAny: ['backend'],
+      });
+
+      // Watch with label "debug" → session-A excluded
+      let targets = index.resolveTargets(cwd, ['backend'], ['debug']);
+      expect(targets).toEqual(['session-B']);
+
+      // Without "debug" → both match
+      targets = index.resolveTargets(cwd, ['backend'], []);
+      expect(targets.sort()).toEqual(['session-A', 'session-B']);
+    } finally {
+      cleanupTmpDir(cwd);
+    }
+  });
+
+  it('excludeLabels combined with excludeTagsAny both apply', () => {
+    const cwd = createTmpDir();
+    try {
+      const index = new SubscriberIndex();
+
+      index.subscribe('session-A', cwd, {
+        includeTagsAny: ['backend'],
+        excludeTagsAny: ['noise'],
+        excludeLabels: ['debug'],
+      });
+
+      // Tag "noise" present → excluded
+      let targets = index.resolveTargets(cwd, ['backend', 'noise'], []);
+      expect(targets).toEqual([]);
+
+      // Label "debug" present → excluded
+      targets = index.resolveTargets(cwd, ['backend'], ['debug']);
+      expect(targets).toEqual([]);
+
+      // Neither exclusion trigger → matched
+      targets = index.resolveTargets(cwd, ['backend'], []);
+      expect(targets).toEqual(['session-A']);
+    } finally {
+      cleanupTmpDir(cwd);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Worst-first tests
 // ---------------------------------------------------------------------------
 

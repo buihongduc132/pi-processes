@@ -50,7 +50,8 @@ export class HeartbeatManager {
    */
   heartbeat(sessionId: string, cwd: string): void {
     const existing = this.registry.readSession(cwd, sessionId);
-    const processes = existing?.processes ?? {};
+    if (!existing) return; // guard: do not create zombie sessions
+    const processes = existing.processes;
     this.registry.write(sessionId, cwd, processes, {
       lastHeartbeatAt: Date.now(),
     });

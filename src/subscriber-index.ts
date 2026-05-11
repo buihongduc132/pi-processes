@@ -165,6 +165,7 @@ export class SubscriberIndex {
       let excluded = false;
 
       for (const entry of entries) {
+        if (entry.cwd !== cwd) continue;
         if (matched && excluded) break;
 
         if (!matched) matched = isIncluded(entry.subscription, watchTags, watchLabels);
