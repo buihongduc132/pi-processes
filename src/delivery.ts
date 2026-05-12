@@ -46,8 +46,10 @@ type SessionHealth = "ok" | "crashed";
  * Format: `[processName] watchName: line (tags: tag1, tag2)`
  */
 function formatMatchMessage(match: MatchInput): string {
-  // Sanitize: strip control chars (\n, \r, \t, chars < 0x20 except space)
-  let line = match.line.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+  // Sanitize: strip ANSI escape sequences first
+  let line = match.line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+  // Then strip control chars (\n, \r, \t, chars < 0x20 except space)
+  line = line.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     .replace(/[\n\r\t]/g, ' ');
   // Truncate to 500 chars
   if (line.length > 500) {

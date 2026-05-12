@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Registry } from "./registry";
 import { HeartbeatManager } from "./heartbeat";
 
@@ -72,10 +72,9 @@ describe("HeartbeatManager", () => {
 
     // Simulate crash: the session entry still exists but no further heartbeats
     // Advance time beyond TTL
-    const originalNow = Date.now;
     const crashTime = Date.now();
-    // eslint-disable-next-line no-global-assign
-    Date.now = () => crashTime + 10_000; // 10s later, past the 5s TTL
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(crashTime + 10_000)); // 10s later, past the 5s TTL
 
     try {
       const result = hb.pruneStale(cwd);
@@ -89,8 +88,7 @@ describe("HeartbeatManager", () => {
       expect(session).not.toBeNull();
       expect(session!.processes.proc_1.status).toBe("terminated");
     } finally {
-      // eslint-disable-next-line no-global-assign
-      Date.now = originalNow;
+      vi.useRealTimers();
     }
   });
 
@@ -110,14 +108,13 @@ describe("HeartbeatManager", () => {
     const hb = new HeartbeatManager(reg, { defaultTtlMs: 30_000 });
 
     // Write heartbeat at an artificially old time
-    const realNow = Date.now;
-    // eslint-disable-next-line no-global-assign
-    Date.now = () => 1000; // epoch+1s — very old
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(1000)); // epoch+1s — very old
     hb.heartbeat("ses_skewed", cwd);
 
     // Now "real" time is current — the heartbeat appears 55+ years stale
-    // eslint-disable-next-line no-global-assign
-    Date.now = realNow;
+    vi.setSystemTime(new Date()); // restore to real current time
+    vi.useRealTimers();
 
     const result = hb.pruneStale(cwd);
 
@@ -168,17 +165,15 @@ describe("HeartbeatManager", () => {
     const hb = new HeartbeatManager(reg, { defaultTtlMs: 1000 });
 
     // Advance time past TTL
-    const originalNow = Date.now;
     const baseTime = Date.now();
-    // eslint-disable-next-line no-global-assign
-    Date.now = () => baseTime + 5000;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(baseTime + 5000));
 
     try {
       const result = hb.pruneStale(cwd);
       expect(result.prunedSessions).toContain("ses_stale");
     } finally {
-      // eslint-disable-next-line no-global-assign
-      Date.now = originalNow;
+      vi.useRealTimers();
     }
   });
 
@@ -221,10 +216,9 @@ describe("HeartbeatManager", () => {
 
     // No heartbeat written — session is immediately stale
 
-    const originalNow = Date.now;
     const baseTime = Date.now();
-    // eslint-disable-next-line no-global-assign
-    Date.now = () => baseTime + 5000;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(baseTime + 5000));
 
     try {
       const result = hb.pruneStale(cwd);
@@ -239,8 +233,7 @@ describe("HeartbeatManager", () => {
       // Already-exited process stays exited
       expect(session!.processes.proc_2.status).toBe("exited");
     } finally {
-      // eslint-disable-next-line no-global-assign
-      Date.now = originalNow;
+      vi.useRealTimers();
     }
   });
 
@@ -256,10 +249,9 @@ describe("HeartbeatManager", () => {
 
     const hb = new HeartbeatManager(reg, { defaultTtlMs: 1000 });
 
-    const originalNow = Date.now;
     const baseTime = Date.now();
-    // eslint-disable-next-line no-global-assign
-    Date.now = () => baseTime + 5000;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(baseTime + 5000));
 
     try {
       const result = hb.pruneStale(cwd);
@@ -270,8 +262,7 @@ describe("HeartbeatManager", () => {
       const session = reg.readSession(cwd, "ses_empty");
       expect(session).toBeNull();
     } finally {
-      // eslint-disable-next-line no-global-assign
-      Date.now = originalNow;
+      vi.useRealTimers();
     }
   });
 
@@ -288,10 +279,9 @@ describe("HeartbeatManager", () => {
 
     const hb = new HeartbeatManager(reg, { defaultTtlMs: 1000 });
 
-    const originalNow = Date.now;
     const baseTime = Date.now();
-    // eslint-disable-next-line no-global-assign
-    Date.now = () => baseTime + 5000;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(baseTime + 5000));
 
     try {
       const result1 = hb.pruneStale(cwd);
@@ -305,8 +295,7 @@ describe("HeartbeatManager", () => {
       expect(result2.prunedSessions).toHaveLength(0);
       expect(result2.terminatedProcesses).toHaveLength(0);
     } finally {
-      // eslint-disable-next-line no-global-assign
-      Date.now = originalNow;
+      vi.useRealTimers();
     }
   });
 
@@ -325,30 +314,25 @@ describe("HeartbeatManager", () => {
     const hb = new HeartbeatManager(reg, { defaultTtlMs: 100 });
     hb.heartbeat("ses_custom", cwd);
 
-    // 50ms later — still within TTL
-    const originalNow = Date.now;
     const baseTime = Date.now();
-    // eslint-disable-next-line no-global-assign
-    Date.now = () => baseTime + 50;
+    vi.useFakeTimers();
 
+    // 50ms later — still within TTL
+    vi.setSystemTime(new Date(baseTime + 50));
     try {
       const result1 = hb.pruneStale(cwd);
       expect(result1.prunedSessions).toHaveLength(0);
     } finally {
-      // eslint-disable-next-line no-global-assign
-      Date.now = originalNow;
+      // continue with fake timers for next check
     }
 
     // 200ms later — past TTL
-    // eslint-disable-next-line no-global-assign
-    Date.now = () => baseTime + 200;
-
+    vi.setSystemTime(new Date(baseTime + 200));
     try {
       const result2 = hb.pruneStale(cwd);
       expect(result2.prunedSessions).toContain("ses_custom");
     } finally {
-      // eslint-disable-next-line no-global-assign
-      Date.now = originalNow;
+      vi.useRealTimers();
     }
   });
 

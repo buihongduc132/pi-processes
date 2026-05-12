@@ -317,6 +317,7 @@ describe("Registry", () => {
       // Write a valid registry file, then make it unreadable (chmod 000)
       // On non-Windows, readFileSync should throw EACCES, not be swallowed
       if (process.platform === 'win32') return; // skip on Windows
+      if (process.getuid?.() === 0) return; // root bypasses chmod
 
       const reg1 = new Registry(registryPath);
       reg1.write('ses_001', '/abs/project-a', { p1: makeProcess() });

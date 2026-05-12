@@ -262,11 +262,7 @@ describe("DeliveryManager – core cases", () => {
 
     const msg: string = manager.formatMessage(match);
 
-    expect(msg).toContain("backend-dev");      // processName
-    expect(msg).toContain("backend-ready");    // watchName
-    expect(msg).toContain("Server ready on http://localhost:3000"); // line
-    expect(msg).toContain("backend");          // tag
-    expect(msg).toContain("server");           // tag
+    expect(msg).toMatch(/^\[backend-dev\] backend-ready: Server ready on http:\/\/localhost:3000 \(tags: backend, server\)$/);
   });
 
   // (i) deliver returns delivery report with success/fail per session.
@@ -352,5 +348,19 @@ describe('DeliveryManager \u2013 Edge case fixes', () => {
     expect(msg).toContain('[truncated]');
     // Should not contain the full 600-char line
     expect(msg).not.toContain('A'.repeat(600));
+  });
+
+  // Fix V1-2: formatMessage strips ANSI escape codes (SEC-4)
+  it('strips ANSI escape codes from line', () => {
+    const index = new SubscriberIndex();
+    const manager = new DeliveryManager(index);
+    const match = makeMatch({
+      line: '\x1b[31mERROR\x1b[0m: something failed',
+    });
+
+    const msg = manager.formatMessage(match);
+
+    expect(msg).not.toContain('\x1b');
+    expect(msg).toContain('ERROR: something failed');
   });
 });

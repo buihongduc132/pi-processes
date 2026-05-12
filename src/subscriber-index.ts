@@ -104,8 +104,8 @@ function getOrInit<K, V>(map: Map<K, V>, key: K, factory: () => V): V {
  * efficient "which sessions should be notified for these tags/labels?" queries.
  *
  * Sessions may subscribe multiple times (additive). A session matches a
- * resolveTargets call if **any** of its subscriptions satisfy the include
- * criteria and **none** trigger an exclusion.
+ * resolveTargets call if **any single** subscription satisfies the include
+ * criteria and does NOT trigger an exclusion for that same subscription.
  */
 export class SubscriberIndex {
   /** sessionId → array of subscriptions (additive). */
@@ -143,8 +143,9 @@ export class SubscriberIndex {
   /**
    * Find all sessions that should be notified for a given watch event.
    *
-   * A session is included if **any** of its subscriptions match the include
-   * criteria AND none of its subscriptions trigger an exclusion.
+   * A session is included if **any single** subscription both matches the include
+   * criteria AND does NOT trigger an exclusion. Exclusion from one subscription
+   * cannot veto another subscription's match.
    *
    * @param cwd         - Working directory to scope the query.
    * @param watchTags   - Tags present on the triggering event.
@@ -161,19 +162,12 @@ export class SubscriberIndex {
       const entries = this.sessionSubs.get(sessionId);
       if (!entries) continue;
 
-      let matched = false;
-      let excluded = false;
-
       for (const entry of entries) {
         if (entry.cwd !== cwd) continue;
-        if (matched && excluded) break;
-
-        if (!matched) matched = isIncluded(entry.subscription, watchTags, watchLabels);
-        if (!excluded) excluded = isExcluded(entry.subscription, watchTags, watchLabels);
-      }
-
-      if (matched && !excluded) {
-        results.push(sessionId);
+        if (isIncluded(entry.subscription, watchTags, watchLabels) && !isExcluded(entry.subscription, watchTags, watchLabels)) {
+          results.push(sessionId);
+          break; // one qualifying subscription is enough
+        }
       }
     }
 

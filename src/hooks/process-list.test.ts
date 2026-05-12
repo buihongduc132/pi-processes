@@ -207,7 +207,7 @@ describe("ProcessLister", () => {
     const summary = lister.getSummary(cwd, "ses_001");
 
     expect(summary.current.running).toHaveLength(2);
-    const names = summary.current.running.map((p: any) => p.name);
+    const names = summary.current.running.map((p) => p.name);
     expect(names).toContain("dev-server");
     expect(names).toContain("watcher");
   });
@@ -390,7 +390,7 @@ describe("ProcessLister", () => {
     expect(summary.current.lastCompleted!.name).toBe("build");
 
     // Status breakdown via the running array
-    const runningStatuses = summary.current.running.map((p: any) => p.status);
+    const runningStatuses = summary.current.running.map((p) => p.status);
     expect(runningStatuses.every((s: string) => s === "running")).toBe(true);
     expect(summary.current.lastCompleted!.status).toBe("exited");
   });

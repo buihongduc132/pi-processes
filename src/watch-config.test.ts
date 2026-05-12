@@ -203,4 +203,15 @@ describe("parseWatchConfig – core cases", () => {
     const result = parseWatchConfig({});
     expect(result).toEqual({});
   });
+
+  // (i) Non-array tags throws
+  it('throws on non-array tags value', () => {
+    const input = {
+      'bad-tags': {
+        pattern: 'error',
+        tags: 'not-array' as any,
+      },
+    };
+    expect(() => parseWatchConfig(input)).toThrow(/tags must be an array/);
+  });
 });
