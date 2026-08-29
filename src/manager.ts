@@ -189,6 +189,10 @@ export class ProcessManager {
   ): ProcessInfo {
     const resolvedWatches = this.resolveLogWatches(options?.logWatches);
     const id = `proc_${++this.counter}`;
+    // Belt: logDir may have been removed externally (tmpfiles cleaner, crash
+    // between shutdown and cleanup). Recreate before opening log files so
+    // start() never ENOENTs on a deleted directory.
+    mkdirSync(this.logDir, { recursive: true });
     const stdoutFile = join(this.logDir, `${id}-stdout.log`);
     const stderrFile = join(this.logDir, `${id}-stderr.log`);
     const combinedFile = join(this.logDir, `${id}-combined.log`);
